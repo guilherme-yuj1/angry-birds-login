@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angry Birds - Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Fundo com nuvens animadas -->
+    <div class="background">
+        <div class="clouds">
+            <div class="cloud cloud-1"></div>
+            <div class="cloud cloud-2"></div>
+            <div class="cloud cloud-3"></div>
+        </div>
+        <div class="grass"></div>
+    </div>
+
+    <!-- Container principal -->
+    <div class="container">
+        <!-- Logo Angry Birds -->
+        <div class="logo-container">
+            <h1 class="logo">🐦 ANGRY BIRDS</h1>
+            <p class="tagline">Derrube o Porquinho para Entrar</p>
+        </div>
+
+        <!-- Formulário de Login -->
+        <div class="login-box">
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <label for="username">Usuário</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        placeholder="Digite seu usuário"
+                        required
+                    >
+                </div>
+
+                <div class="input-group">
+                    <label for="password">Senha</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        placeholder="Digite sua senha"
+                        required
+                    >
+                </div>
+
+                <p class="tutorial-message">🎮 Antes de entrar, complete o tutorial derrubando o porquinho!</p>
+
+                <button 
+                    type="submit" 
+                    id="loginBtn" 
+                    class="login-btn disabled" 
+                    disabled
+                    title="Complete o tutorial primeiro"
+                >
+                    ENTRAR
+                </button>
+
+                <div class="button-tooltip" id="buttonTooltip">
+                    ⚠️ Complete o tutorial primeiro
+                </div>
+            </form>
+        </div>
+
+        <!-- Minijogo Angry Birds -->
+        <div class="game-section">
+            <h2 class="game-title">🎯 Tutorial: Derrube o Porquinho!</h2>
+            
+            <div class="game-container">
+                <!-- Canvas para o jogo -->
+                <canvas id="gameCanvas"></canvas>
+            </div>
+
+            <div class="game-stats">
+                <div class="stat">
+                    <span class="stat-label">Tentativas:</span>
+                    <span id="attemptCount" class="stat-value">0</span>
+                </div>
+                <button id="resetBtn" class="reset-btn">🔄 Reiniciar Tutorial</button>
+            </div>
+
+            <div id="successMessage" class="success-message hidden">
+                <div class="success-content">
+                    <h3>🎉 Parabéns!</h3>
+                    <p>Tutorial concluído com sucesso!</p>
+                    <p>O botão "Entrar" foi desbloqueado.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confetes -->
+        <div id="confetti-container"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
