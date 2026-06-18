@@ -2,17 +2,30 @@
 // CONSTANTES E CONFIGURAÇÕES
 // ========================================
 
-const GAME_WIDTH = 800;
-const GAME_HEIGHT = 400;
-const BIRD_RADIUS = 15;
-const SLINGSHOT_X = 80;
-const SLINGSHOT_Y = GAME_HEIGHT - 100;
-const PIG_X = GAME_WIDTH - 120;
-const PIG_Y = GAME_HEIGHT - 150;
-const PIG_RADIUS = 18;
-const GRAVITY = 0.5;
-const FRICTION = 0.98;
-const LAUNCH_POWER_MULTIPLIER = 0.15;
+const GAME_WIDTH = 900;
+const GAME_HEIGHT = 450;
+const BIRD_RADIUS = 18;
+
+// Posição do estilingue (esquerda)
+const SLINGSHOT_BASE_X = 100;
+const SLINGSHOT_BASE_Y = GAME_HEIGHT - 120;
+const SLINGSHOT_FORK_X = SLINGSHOT_BASE_X;
+const SLINGSHOT_FORK_Y = SLINGSHOT_BASE_Y - 80;
+
+// Posição inicial do pássaro (na forquilha do estilingue)
+const BIRD_START_X = SLINGSHOT_FORK_X;
+const BIRD_START_Y = SLINGSHOT_FORK_Y;
+
+// Posição do porquinho (direita)
+const PIG_X = GAME_WIDTH - 150;
+const PIG_Y = GAME_HEIGHT - 160;
+const PIG_RADIUS = 22;
+
+// Física
+const GRAVITY = 0.6;
+const FRICTION = 0.985;
+const LAUNCH_POWER_MULTIPLIER = 0.12;
+const MAX_DRAG_DISTANCE = 120;
 
 // ========================================
 // VARIÁVEIS GLOBAIS
@@ -35,13 +48,14 @@ let dragStartY = 0;
 
 // Estado do pássaro
 let bird = {
-    x: SLINGSHOT_X,
-    y: SLINGSHOT_Y,
+    x: BIRD_START_X,
+    y: BIRD_START_Y,
     vx: 0,
     vy: 0,
     radius: BIRD_RADIUS,
     isFlying: false,
-    hasHit: false
+    hasHit: false,
+    rotation: 0
 };
 
 // Estado do porquinho
@@ -50,133 +64,312 @@ let pig = {
     y: PIG_Y,
     radius: PIG_RADIUS,
     isDefeated: false,
-    shakeAmount: 0
+    shakeAmount: 0,
+    shakeAngle: 0
 };
 
 // Blocos de madeira (suporte do porquinho)
 let blocks = [
-    { x: PIG_X - 60, y: GAME_HEIGHT - 100, width: 40, height: 60, rotation: 0 },
-    { x: PIG_X, y: GAME_HEIGHT - 100, width: 40, height: 60, rotation: 0 },
-    { x: PIG_X + 60, y: GAME_HEIGHT - 100, width: 40, height: 60, rotation: 0 }
+    { x: PIG_X - 70, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 },
+    { x: PIG_X, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 },
+    { x: PIG_X + 70, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 }
 ];
 
 // ========================================
-// FUNÇÕES DE DESENHO
+// FUNÇÕES DE DESENHO - CENÁRIO
 // ========================================
 
 /**
  * Desenha o cenário do jogo
  */
 function drawBackground() {
-    // Céu
-    ctx.fillStyle = '#87ceeb';
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT * 0.6);
+    // Céu com gradiente
+    const skyGradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT * 0.65);
+    skyGradient.addColorStop(0, '#87ceeb');
+    skyGradient.addColorStop(1, '#e0f6ff');
+    ctx.fillStyle = skyGradient;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT * 0.65);
     
-    // Terra/Grama
-    ctx.fillStyle = '#90ee90';
-    ctx.fillRect(0, GAME_HEIGHT * 0.6, GAME_WIDTH, GAME_HEIGHT * 0.4);
+    // Terra/Grama com gradiente
+    const grassGradient = ctx.createLinearGradient(0, GAME_HEIGHT * 0.65, 0, GAME_HEIGHT);
+    grassGradient.addColorStop(0, '#90ee90');
+    grassGradient.addColorStop(1, '#32a852');
+    ctx.fillStyle = grassGradient;
+    ctx.fillRect(0, GAME_HEIGHT * 0.65, GAME_WIDTH, GAME_HEIGHT * 0.35);
     
-    // Linha de grama
-    ctx.strokeStyle = '#32a852';
+    // Linha de separação céu-terra
+    ctx.strokeStyle = '#7fb069';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(0, GAME_HEIGHT * 0.6);
-    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT * 0.6);
+    ctx.moveTo(0, GAME_HEIGHT * 0.65);
+    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT * 0.65);
     ctx.stroke();
 }
 
 /**
- * Desenha o estilingue
+ * Desenha o estilingue (estilo clássico em "Y")
  */
 function drawSlingshot() {
     const birdX = bird.x;
     const birdY = bird.y;
     
-    ctx.strokeStyle = '#8B4513';
-    ctx.lineWidth = 4;
+    ctx.save();
     
-    // Poste do estilingue
-    ctx.beginPath();
-    ctx.moveTo(SLINGSHOT_X, SLINGSHOT_Y - 80);
-    ctx.lineTo(SLINGSHOT_X, SLINGSHOT_Y);
-    ctx.stroke();
+    // ===== BASE DO ESTILINGUE (Madeira) =====
+    ctx.fillStyle = '#8B4513';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 4;
     
-    // Cordas do estilingue (ligadas ao pássaro se estiver sendo arrastado)
-    ctx.strokeStyle = 'rgba(139, 69, 19, 0.7)';
-    ctx.lineWidth = 2;
+    // Plataforma base (retângulo)
+    ctx.fillRect(SLINGSHOT_BASE_X - 30, SLINGSHOT_BASE_Y, 60, 30);
     
-    // Corda esquerda
-    ctx.beginPath();
-    ctx.moveTo(SLINGSHOT_X - 10, SLINGSHOT_Y - 60);
-    ctx.quadraticCurveTo(SLINGSHOT_X - 20, SLINGSHOT_Y - 40, birdX - BIRD_RADIUS, birdY - BIRD_RADIUS);
-    ctx.stroke();
+    // Detalhe de madeira na base
+    ctx.strokeStyle = '#654321';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 30; i += 5) {
+        ctx.beginPath();
+        ctx.moveTo(SLINGSHOT_BASE_X - 30, SLINGSHOT_BASE_Y + i);
+        ctx.lineTo(SLINGSHOT_BASE_X + 30, SLINGSHOT_BASE_Y + i);
+        ctx.stroke();
+    }
     
-    // Corda direita
-    ctx.beginPath();
-    ctx.moveTo(SLINGSHOT_X + 10, SLINGSHOT_Y - 60);
-    ctx.quadraticCurveTo(SLINGSHOT_X + 20, SLINGSHOT_Y - 40, birdX + BIRD_RADIUS, birdY + BIRD_RADIUS);
-    ctx.stroke();
+    // ===== BRAÇOS DO ESTILINGUE =====
+    const armWidth = 8;
+    const armLength = 100;
     
-    // Base do estilingue
+    // Braço esquerdo
     ctx.fillStyle = '#A0522D';
+    ctx.shadowBlur = 6;
     ctx.beginPath();
-    ctx.ellipse(SLINGSHOT_X, SLINGSHOT_Y, 25, 15, 0, 0, Math.PI * 2);
+    ctx.moveTo(SLINGSHOT_BASE_X - 10, SLINGSHOT_BASE_Y);
+    ctx.lineTo(SLINGSHOT_BASE_X - 15, SLINGSHOT_BASE_Y - armLength);
+    ctx.lineTo(SLINGSHOT_BASE_X - 15 + armWidth, SLINGSHOT_BASE_Y - armLength);
+    ctx.lineTo(SLINGSHOT_BASE_X - 10 + armWidth, SLINGSHOT_BASE_Y);
+    ctx.closePath();
     ctx.fill();
+    
+    // Braço direito
+    ctx.beginPath();
+    ctx.moveTo(SLINGSHOT_BASE_X + 10, SLINGSHOT_BASE_Y);
+    ctx.lineTo(SLINGSHOT_BASE_X + 15, SLINGSHOT_BASE_Y - armLength);
+    ctx.lineTo(SLINGSHOT_BASE_X + 15 + armWidth, SLINGSHOT_BASE_Y - armLength);
+    ctx.lineTo(SLINGSHOT_BASE_X + 10 + armWidth, SLINGSHOT_BASE_Y);
+    ctx.closePath();
+    ctx.fill();
+    
+    // ===== FORQUILHA (Topo dos braços) =====
+    ctx.fillStyle = '#8B4513';
+    ctx.shadowBlur = 4;
+    
+    // Ponta esquerda da forquilha
+    ctx.beginPath();
+    ctx.arc(SLINGSHOT_FORK_X - 12, SLINGSHOT_FORK_Y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Ponta direita da forquilha
+    ctx.beginPath();
+    ctx.arc(SLINGSHOT_FORK_X + 12, SLINGSHOT_FORK_Y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== CORDAS DO ESTILINGUE =====
+    if (isDragging) {
+        // Enquanto está arrastando, as cordas seguem o pássaro
+        ctx.strokeStyle = 'rgba(139, 69, 19, 0.8)';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Corda esquerda
+        ctx.beginPath();
+        ctx.moveTo(SLINGSHOT_FORK_X - 12, SLINGSHOT_FORK_Y);
+        ctx.quadraticCurveTo(
+            SLINGSHOT_FORK_X - 25,
+            SLINGSHOT_FORK_Y + (birdY - SLINGSHOT_FORK_Y) / 2,
+            birdX - BIRD_RADIUS * 0.6,
+            birdY - BIRD_RADIUS * 0.4
+        );
+        ctx.stroke();
+        
+        // Corda direita
+        ctx.beginPath();
+        ctx.moveTo(SLINGSHOT_FORK_X + 12, SLINGSHOT_FORK_Y);
+        ctx.quadraticCurveTo(
+            SLINGSHOT_FORK_X + 25,
+            SLINGSHOT_FORK_Y + (birdY - SLINGSHOT_FORK_Y) / 2,
+            birdX + BIRD_RADIUS * 0.6,
+            birdY + BIRD_RADIUS * 0.4
+        );
+        ctx.stroke();
+    } else if (!bird.isFlying) {
+        // Quando não está arrastando e o pássaro está no repouso, cordas voltam ao normal
+        ctx.strokeStyle = 'rgba(139, 69, 19, 0.6)';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Corda esquerda (retornada)
+        ctx.beginPath();
+        ctx.moveTo(SLINGSHOT_FORK_X - 12, SLINGSHOT_FORK_Y);
+        ctx.quadraticCurveTo(
+            SLINGSHOT_FORK_X - 20,
+            SLINGSHOT_FORK_Y + 30,
+            SLINGSHOT_FORK_X - 8,
+            SLINGSHOT_FORK_Y + 50
+        );
+        ctx.stroke();
+        
+        // Corda direita (retornada)
+        ctx.beginPath();
+        ctx.moveTo(SLINGSHOT_FORK_X + 12, SLINGSHOT_FORK_Y);
+        ctx.quadraticCurveTo(
+            SLINGSHOT_FORK_X + 20,
+            SLINGSHOT_FORK_Y + 30,
+            SLINGSHOT_FORK_X + 8,
+            SLINGSHOT_FORK_Y + 50
+        );
+        ctx.stroke();
+    }
+    // Se isFlying = true, não desenha as cordas
+    
+    ctx.restore();
 }
 
+// ========================================
+// FUNÇÕES DE DESENHO - PÁSSARO
+// ========================================
+
 /**
- * Desenha o pássaro vermelho
+ * Desenha o pássaro Red inspirado no Angry Birds
  */
 function drawBird() {
     ctx.save();
     ctx.translate(bird.x, bird.y);
     
-    // Calcular ângulo de rotação baseado na velocidade
-    if (bird.isFlying && (bird.vx !== 0 || bird.vy !== 0)) {
-        const angle = Math.atan2(bird.vy, bird.vx);
-        ctx.rotate(angle);
+    // Rotação baseada na velocidade
+    if (bird.isFlying && (Math.abs(bird.vx) > 0.5 || Math.abs(bird.vy) > 0.5)) {
+        bird.rotation = Math.atan2(bird.vy, bird.vx);
+        ctx.rotate(bird.rotation);
     }
     
-    // Corpo do pássaro (vermelho)
-    ctx.fillStyle = '#ff4444';
+    // ===== CORPO PRINCIPAL (Vermelho) =====
+    ctx.fillStyle = '#FF4444';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    
     ctx.beginPath();
-    ctx.ellipse(0, 0, BIRD_RADIUS * 1.2, BIRD_RADIUS * 0.9, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, BIRD_RADIUS * 1.3, BIRD_RADIUS * 1.0, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Olho
-    ctx.fillStyle = 'white';
+    // ===== BARRIGA (Bege) =====
+    ctx.fillStyle = '#FDD9A8';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 4;
+    
     ctx.beginPath();
-    ctx.arc(BIRD_RADIUS * 0.5, -BIRD_RADIUS * 0.3, 4, 0, Math.PI * 2);
+    ctx.ellipse(0, 2, BIRD_RADIUS * 0.8, BIRD_RADIUS * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
-    ctx.arc(BIRD_RADIUS * 0.5, -BIRD_RADIUS * 0.3, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    // ===== BICO (Amarelo) =====
+    ctx.fillStyle = '#FFDD00';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 3;
     
-    // Bico (amarelo)
-    ctx.fillStyle = '#ffff00';
+    const beakSize = 8;
     ctx.beginPath();
-    ctx.moveTo(BIRD_RADIUS * 1.2, 0);
-    ctx.lineTo(BIRD_RADIUS * 1.5, -3);
-    ctx.lineTo(BIRD_RADIUS * 1.5, 3);
+    ctx.moveTo(BIRD_RADIUS * 1.1, -2);
+    ctx.lineTo(BIRD_RADIUS * 1.4, -4);
+    ctx.lineTo(BIRD_RADIUS * 1.4, 0);
+    ctx.lineTo(BIRD_RADIUS * 1.1, 2);
     ctx.closePath();
     ctx.fill();
     
-    // Crista vermelha
-    ctx.fillStyle = '#cc0000';
+    // Detalhe do bico
+    ctx.strokeStyle = '#CCAA00';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    
+    // ===== OLHOS =====
+    // Branco do olho
+    ctx.fillStyle = 'white';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 2;
+    
+    // Olho esquerdo
     ctx.beginPath();
-    ctx.ellipse(0, -BIRD_RADIUS * 0.8, 6, 8, -0.3, 0, Math.PI * 2);
+    ctx.arc(BIRD_RADIUS * 0.3, -BIRD_RADIUS * 0.4, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Olho direito
+    ctx.beginPath();
+    ctx.arc(BIRD_RADIUS * 0.3, BIRD_RADIUS * 0.35, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pupila (preta)
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(BIRD_RADIUS * 0.4, -BIRD_RADIUS * 0.4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(BIRD_RADIUS * 0.4, BIRD_RADIUS * 0.35, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== SOBRANCELHAS (Pretas, inclinadas para baixo) =====
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    
+    // Sobrancelha esquerda
+    ctx.beginPath();
+    ctx.moveTo(BIRD_RADIUS * 0, -BIRD_RADIUS * 0.65);
+    ctx.quadraticCurveTo(BIRD_RADIUS * 0.25, -BIRD_RADIUS * 0.75, BIRD_RADIUS * 0.5, -BIRD_RADIUS * 0.55);
+    ctx.stroke();
+    
+    // Sobrancelha direita
+    ctx.beginPath();
+    ctx.moveTo(BIRD_RADIUS * 0, BIRD_RADIUS * 0.6);
+    ctx.quadraticCurveTo(BIRD_RADIUS * 0.25, BIRD_RADIUS * 0.7, BIRD_RADIUS * 0.5, BIRD_RADIUS * 0.5);
+    ctx.stroke();
+    
+    // ===== PENAS NO TOPO (Vermelho intenso) =====
+    ctx.fillStyle = '#CC0000';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = 3;
+    
+    // Pena central
+    ctx.beginPath();
+    ctx.ellipse(0, -BIRD_RADIUS * 1.1, 4, 10, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pena esquerda
+    ctx.beginPath();
+    ctx.ellipse(-BIRD_RADIUS * 0.4, -BIRD_RADIUS * 0.95, 3.5, 8, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Pena direita
+    ctx.beginPath();
+    ctx.ellipse(BIRD_RADIUS * 0.4, -BIRD_RADIUS * 0.95, 3.5, 8, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== CAUDA (Preta) =====
+    ctx.fillStyle = '#1a1a1a';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 3;
+    
+    ctx.beginPath();
+    ctx.ellipse(-BIRD_RADIUS * 1.2, 0, 3, 8, -0.3, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
-    
-    // Efeito de sombra
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
 }
+
+// ========================================
+// FUNÇÕES DE DESENHO - PORQUINHO E BLOCOS
+// ========================================
 
 /**
  * Desenha o porquinho
@@ -184,47 +377,99 @@ function drawBird() {
 function drawPig() {
     ctx.save();
     ctx.translate(pig.x + pig.shakeAmount, pig.y);
+    ctx.rotate(pig.shakeAngle);
     
-    // Corpo do porquinho (verde)
+    // ===== CORPO (Verde) =====
     ctx.fillStyle = '#90EE90';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    
     ctx.beginPath();
-    ctx.ellipse(0, 0, PIG_RADIUS * 1.3, PIG_RADIUS * 0.95, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, PIG_RADIUS * 1.4, PIG_RADIUS * 1.05, 0, 0, Math.PI * 2);
     ctx.fill();
     
-    // Olhos
+    // ===== FOCINHO (Verde mais escuro, destacado) =====
+    ctx.fillStyle = '#7ACC7A';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 3;
+    
+    ctx.beginPath();
+    ctx.ellipse(PIG_RADIUS * 0.8, 0, PIG_RADIUS * 0.6, PIG_RADIUS * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== NARINAS =====
+    ctx.fillStyle = '#556055';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 2;
+    
+    ctx.beginPath();
+    ctx.arc(PIG_RADIUS * 0.95, -3, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(PIG_RADIUS * 0.95, 3, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== OLHOS (Grandes e brancos) =====
     ctx.fillStyle = 'white';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 2;
+    
+    // Olho esquerdo
     ctx.beginPath();
-    ctx.arc(-PIG_RADIUS * 0.4, -PIG_RADIUS * 0.3, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(PIG_RADIUS * 0.4, -PIG_RADIUS * 0.3, 5, 0, Math.PI * 2);
+    ctx.arc(-PIG_RADIUS * 0.5, -PIG_RADIUS * 0.4, 6.5, 0, Math.PI * 2);
     ctx.fill();
     
-    // Pupilas
-    ctx.fillStyle = 'black';
+    // Olho direito
     ctx.beginPath();
-    ctx.arc(-PIG_RADIUS * 0.4, -PIG_RADIUS * 0.3, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(PIG_RADIUS * 0.4, -PIG_RADIUS * 0.3, 2.5, 0, Math.PI * 2);
+    ctx.arc(-PIG_RADIUS * 0.5, PIG_RADIUS * 0.4, 6.5, 0, Math.PI * 2);
     ctx.fill();
     
-    // Narinas
-    ctx.fillStyle = '#555';
+    // ===== PUPILAS (Pretas, pequenas e expressivas) =====
+    ctx.fillStyle = '#000000';
     ctx.beginPath();
-    ctx.arc(-3, PIG_RADIUS * 0.2, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(3, PIG_RADIUS * 0.2, 2, 0, Math.PI * 2);
+    ctx.arc(-PIG_RADIUS * 0.45, -PIG_RADIUS * 0.35, 3.5, 0, Math.PI * 2);
     ctx.fill();
     
-    // Orelhas
+    ctx.beginPath();
+    ctx.arc(-PIG_RADIUS * 0.45, PIG_RADIUS * 0.35, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Brilho nos olhos
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc(-PIG_RADIUS * 0.55, -PIG_RADIUS * 0.45, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(-PIG_RADIUS * 0.55, PIG_RADIUS * 0.25, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // ===== ORELHAS (Pequenas) =====
     ctx.fillStyle = '#90EE90';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 2;
+    
+    // Orelha esquerda
     ctx.beginPath();
-    ctx.ellipse(-PIG_RADIUS * 0.8, -PIG_RADIUS * 0.8, 5, 8, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(-PIG_RADIUS * 0.9, -PIG_RADIUS * 0.9, 5, 8, -0.3, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Orelha direita
     ctx.beginPath();
-    ctx.ellipse(PIG_RADIUS * 0.8, -PIG_RADIUS * 0.8, 5, 8, 0.3, 0, Math.PI * 2);
+    ctx.ellipse(-PIG_RADIUS * 0.9, PIG_RADIUS * 0.9, 5, 8, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Interior das orelhas
+    ctx.fillStyle = '#7ACC7A';
+    ctx.beginPath();
+    ctx.ellipse(-PIG_RADIUS * 0.9, -PIG_RADIUS * 0.9, 3, 5, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.ellipse(-PIG_RADIUS * 0.9, PIG_RADIUS * 0.9, 3, 5, 0.3, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
@@ -239,13 +484,23 @@ function drawBlocks() {
         ctx.translate(block.x, block.y);
         ctx.rotate(block.rotation);
         
-        // Textura de madeira
-        ctx.fillStyle = '#8B4513';
+        // Cor baseada na saúde
+        const healthPercent = block.health / 100;
+        const hueShift = Math.max(0, Math.min(60, healthPercent * 60));
+        ctx.fillStyle = `hsl(${hueShift}, 70%, 40%)`;
+        
+        // Sombra
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 3;
+        
+        // Bloco principal
         ctx.fillRect(-block.width / 2, -block.height / 2, block.width, block.height);
         
         // Padrão de madeira
-        ctx.strokeStyle = '#654321';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 0.5;
         for (let i = 0; i < block.height; i += 10) {
             ctx.beginPath();
             ctx.moveTo(-block.width / 2, i - block.height / 2);
@@ -253,12 +508,65 @@ function drawBlocks() {
             ctx.stroke();
         }
         
+        // Bordas
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-block.width / 2, -block.height / 2, block.width, block.height);
+        
         ctx.restore();
     });
 }
 
+// ========================================
+// FUNÇÕES DE DESENHO - LINHA DE MIRA
+// ========================================
+
 /**
- * Renderiza o frame do jogo
+ * Desenha a linha de mira (quando arrastando)
+ */
+function drawAimLine() {
+    if (!isDragging || bird.isFlying) return;
+    
+    // Calcular direção do lançamento
+    const dragX = bird.x - SLINGSHOT_FORK_X;
+    const dragY = bird.y - SLINGSHOT_FORK_Y;
+    
+    // Normalizar direção (oposta ao arrasto)
+    const distance = Math.sqrt(dragX * dragX + dragY * dragY);
+    if (distance < 5) return;
+    
+    const dirX = -dragX / distance;
+    const dirY = -dragY / distance;
+    
+    // Desenhar linha de mira com pontos
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 6]); // Pontilhado
+    
+    const lineLength = 400;
+    const endX = SLINGSHOT_FORK_X + dirX * lineLength;
+    const endY = SLINGSHOT_FORK_Y + dirY * lineLength;
+    
+    ctx.beginPath();
+    ctx.moveTo(SLINGSHOT_FORK_X, SLINGSHOT_FORK_Y);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    
+    // Círculo no ponto de início
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.arc(SLINGSHOT_FORK_X, SLINGSHOT_FORK_Y, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// ========================================
+// FUNÇÃO PRINCIPAL DE RENDERIZAÇÃO
+// ========================================
+
+/**
+ * Renderiza um frame do jogo
  */
 function render() {
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -266,20 +574,9 @@ function render() {
     drawBackground();
     drawBlocks();
     drawSlingshot();
+    drawAimLine();
     drawBird();
     drawPig();
-    
-    // Indicador visual de arrasto
-    if (isDragging) {
-        ctx.strokeStyle = 'rgba(255, 107, 53, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(SLINGSHOT_X, SLINGSHOT_Y);
-        ctx.lineTo(bird.x, bird.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
 }
 
 // ========================================
@@ -306,24 +603,37 @@ function updateBirdPhysics() {
     // Colisão com chão
     if (bird.y + BIRD_RADIUS > GAME_HEIGHT) {
         bird.y = GAME_HEIGHT - BIRD_RADIUS;
-        bird.vy = 0;
-        bird.vx = 0;
-        bird.isFlying = false;
-        resetBirdPosition();
+        bird.vy *= -0.3; // Bounce reduzido
+        bird.vx *= FRICTION;
+        
+        // Parar se a velocidade for muito baixa
+        if (Math.abs(bird.vy) < 1 && Math.abs(bird.vx) < 1) {
+            bird.isFlying = false;
+            resetBirdPosition();
+        }
     }
     
     // Colisão com paredes
     if (bird.x - BIRD_RADIUS < 0) {
         bird.x = BIRD_RADIUS;
-        bird.vx = 0;
+        bird.vx *= -0.5;
     }
     if (bird.x + BIRD_RADIUS > GAME_WIDTH) {
         bird.x = GAME_WIDTH - BIRD_RADIUS;
-        bird.vx = 0;
+        bird.vx *= -0.5;
+    }
+    
+    // Colisão com teto
+    if (bird.y - BIRD_RADIUS < 0) {
+        bird.y = BIRD_RADIUS;
+        bird.vy *= -0.5;
     }
     
     // Colisão com porquinho
     checkCollisionWithPig();
+    
+    // Colisão com blocos
+    checkCollisionWithBlocks();
 }
 
 /**
@@ -342,6 +652,49 @@ function checkCollisionWithPig() {
 }
 
 /**
+ * Verifica colisão com blocos
+ */
+function checkCollisionWithBlocks() {
+    blocks.forEach(block => {
+        // Detecção de colisão simplificada (círculo vs retângulo rotacionado)
+        const dx = bird.x - block.x;
+        const dy = bird.y - block.y;
+        
+        // Aplicar rotação inversa para simplificar cálculo
+        const cos = Math.cos(-block.rotation);
+        const sin = Math.sin(-block.rotation);
+        const localX = dx * cos - dy * sin;
+        const localY = dx * sin + dy * cos;
+        
+        // Verificar colisão
+        const closestX = Math.max(-block.width / 2, Math.min(localX, block.width / 2));
+        const closestY = Math.max(-block.height / 2, Math.min(localY, block.height / 2));
+        
+        const distX = localX - closestX;
+        const distY = localY - closestY;
+        const distance = Math.sqrt(distX * distX + distY * distY);
+        
+        if (distance < BIRD_RADIUS) {
+            // Reduzir saúde do bloco
+            block.health -= 10;
+            
+            // Aplicar impulso de rebound
+            const rebound = 5;
+            bird.vx *= -0.5;
+            bird.vy *= -0.5;
+        }
+        
+        // Remover blocos destruídos
+        if (block.health <= 0) {
+            const index = blocks.indexOf(block);
+            if (index > -1) {
+                blocks.splice(index, 1);
+            }
+        }
+    });
+}
+
+/**
  * Derrota o porquinho
  */
 function defeatPig() {
@@ -350,9 +703,6 @@ function defeatPig() {
     bird.isFlying = false;
     bird.vx = 0;
     bird.vy = 0;
-    
-    // Tocar som (se disponível)
-    playSound('pig-defeated');
     
     // Animar porquinho
     pigDefeatAnimation();
@@ -365,30 +715,32 @@ function defeatPig() {
     
     // Criar confetes
     createConfetti();
+    
+    // Log
+    console.log('🎉 Porquinho derrotado!');
 }
 
 /**
  * Animação de derrota do porquinho
  */
 function pigDefeatAnimation() {
-    let shakeAmount = 0;
-    let shakeDirection = 1;
-    const maxShake = 5;
-    const shakeDuration = 30;
+    let shakeFrame = 0;
+    const shakeDuration = 40;
     
     const shakeInterval = setInterval(() => {
-        shakeAmount += shakeDirection;
-        if (Math.abs(shakeAmount) > maxShake) {
-            shakeDirection *= -1;
-        }
-        pig.shakeAmount = shakeAmount;
+        shakeFrame++;
+        const progress = shakeFrame / shakeDuration;
         
-        shakeDuration--;
-        if (shakeDuration <= 0) {
+        // Shake diminuindo
+        pig.shakeAmount = Math.cos(shakeFrame * 0.3) * (1 - progress) * 8;
+        pig.shakeAngle = Math.sin(shakeFrame * 0.2) * (1 - progress) * 0.2;
+        
+        if (shakeFrame >= shakeDuration) {
             clearInterval(shakeInterval);
             pig.shakeAmount = 0;
+            pig.shakeAngle = 0;
         }
-    }, 20);
+    }, 16);
 }
 
 /**
@@ -396,12 +748,13 @@ function pigDefeatAnimation() {
  */
 function resetBirdPosition() {
     setTimeout(() => {
-        bird.x = SLINGSHOT_X;
-        bird.y = SLINGSHOT_Y;
+        bird.x = BIRD_START_X;
+        bird.y = BIRD_START_Y;
         bird.vx = 0;
         bird.vy = 0;
         bird.hasHit = false;
-    }, 500);
+        bird.rotation = 0;
+    }, 600);
 }
 
 // ========================================
@@ -409,25 +762,25 @@ function resetBirdPosition() {
 // ========================================
 
 /**
- * Calcula a distância de arrasto e lança o pássaro
+ * Lança o pássaro
  */
 function launchBird(endX, endY) {
-    const dragX = dragStartX - endX;
-    const dragY = dragStartY - endY;
+    const dragX = endX - SLINGSHOT_FORK_X;
+    const dragY = endY - SLINGSHOT_FORK_Y;
     
-    bird.vx = dragX * LAUNCH_POWER_MULTIPLIER;
-    bird.vy = dragY * LAUNCH_POWER_MULTIPLIER;
+    // Velocidade é oposta ao arrasto
+    bird.vx = -dragX * LAUNCH_POWER_MULTIPLIER;
+    bird.vy = -dragY * LAUNCH_POWER_MULTIPLIER;
+    
     bird.isFlying = true;
-    
     attemptCount++;
     attemptCountEl.textContent = attemptCount;
     
-    // Tocar som de lançamento
-    playSound('bird-launch');
+    console.log(`🚀 Lançamento #${attemptCount} - Velocidade: (${bird.vx.toFixed(2)}, ${bird.vy.toFixed(2)})`);
 }
 
 /**
- * Event listener para mouse down no canvas
+ * Event listener para mouse down
  */
 canvas.addEventListener('mousedown', (e) => {
     if (bird.isFlying || tutorialComplete) return;
@@ -436,15 +789,16 @@ canvas.addEventListener('mousedown', (e) => {
     const mouseX = (e.clientX - rect.left) * (GAME_WIDTH / rect.width);
     const mouseY = (e.clientY - rect.top) * (GAME_HEIGHT / rect.height);
     
-    // Verificar se o clique foi no pássaro
+    // Verificar se clicou no pássaro
     const dx = mouseX - bird.x;
     const dy = mouseY - bird.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    if (distance < bird.radius + 15) {
+    if (distance < BIRD_RADIUS + 20) {
         isDragging = true;
-        dragStartX = mouseX;
-        dragStartY = mouseY;
+        dragStartX = bird.x;
+        dragStartY = bird.y;
+        canvas.style.cursor = 'grabbing';
     }
 });
 
@@ -458,16 +812,16 @@ document.addEventListener('mousemove', (e) => {
     const mouseX = (e.clientX - rect.left) * (GAME_WIDTH / rect.width);
     const mouseY = (e.clientY - rect.top) * (GAME_HEIGHT / rect.height);
     
-    // Limitar distância de arrasto
-    const dragX = dragStartX - mouseX;
-    const dragY = dragStartY - mouseY;
-    const maxDragDistance = 100;
+    // Calcular distância de arrasto
+    const dragX = mouseX - SLINGSHOT_FORK_X;
+    const dragY = mouseY - SLINGSHOT_FORK_Y;
     const dragDistance = Math.sqrt(dragX * dragX + dragY * dragY);
     
-    if (dragDistance > maxDragDistance) {
-        const ratio = maxDragDistance / dragDistance;
-        bird.x = dragStartX - dragX * ratio;
-        bird.y = dragStartY - dragY * ratio;
+    if (dragDistance > MAX_DRAG_DISTANCE) {
+        // Limitar distância máxima
+        const ratio = MAX_DRAG_DISTANCE / dragDistance;
+        bird.x = SLINGSHOT_FORK_X + dragX * ratio;
+        bird.y = SLINGSHOT_FORK_Y + dragY * ratio;
     } else {
         bird.x = mouseX;
         bird.y = mouseY;
@@ -481,6 +835,7 @@ document.addEventListener('mouseup', (e) => {
     if (!isDragging) return;
     
     isDragging = false;
+    canvas.style.cursor = 'grab';
     
     const rect = canvas.getBoundingClientRect();
     const mouseX = (e.clientX - rect.left) * (GAME_WIDTH / rect.width);
@@ -490,7 +845,7 @@ document.addEventListener('mouseup', (e) => {
 });
 
 /**
- * Event listeners para touch (mobile)
+ * Event listeners para touch (Mobile)
  */
 canvas.addEventListener('touchstart', (e) => {
     if (bird.isFlying || tutorialComplete) return;
@@ -504,10 +859,10 @@ canvas.addEventListener('touchstart', (e) => {
     const dy = touchY - bird.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    if (distance < bird.radius + 15) {
+    if (distance < BIRD_RADIUS + 20) {
         isDragging = true;
-        dragStartX = touchX;
-        dragStartY = touchY;
+        dragStartX = bird.x;
+        dragStartY = bird.y;
     }
 });
 
@@ -519,15 +874,14 @@ document.addEventListener('touchmove', (e) => {
     const touchX = (touch.clientX - rect.left) * (GAME_WIDTH / rect.width);
     const touchY = (touch.clientY - rect.top) * (GAME_HEIGHT / rect.height);
     
-    const dragX = dragStartX - touchX;
-    const dragY = dragStartY - touchY;
-    const maxDragDistance = 100;
+    const dragX = touchX - SLINGSHOT_FORK_X;
+    const dragY = touchY - SLINGSHOT_FORK_Y;
     const dragDistance = Math.sqrt(dragX * dragX + dragY * dragY);
     
-    if (dragDistance > maxDragDistance) {
-        const ratio = maxDragDistance / dragDistance;
-        bird.x = dragStartX - dragX * ratio;
-        bird.y = dragStartY - dragY * ratio;
+    if (dragDistance > MAX_DRAG_DISTANCE) {
+        const ratio = MAX_DRAG_DISTANCE / dragDistance;
+        bird.x = SLINGSHOT_FORK_X + dragX * ratio;
+        bird.y = SLINGSHOT_FORK_Y + dragY * ratio;
     } else {
         bird.x = touchX;
         bird.y = touchY;
@@ -562,7 +916,7 @@ function unlockLoginButton() {
 }
 
 /**
- * Mostra a mensagem de sucesso
+ * Mostra mensagem de sucesso
  */
 function showSuccessMessage() {
     successMessageEl.classList.remove('hidden');
@@ -576,18 +930,18 @@ function showSuccessMessage() {
  * Cria efeito de confetes
  */
 function createConfetti() {
-    const confettiCount = 30;
-    const colors = ['#ff6b35', '#52b788', '#4a90e2', '#ffff00', '#ff69b4'];
+    const confettiCount = 40;
+    const colors = ['#ff6b35', '#52b788', '#4a90e2', '#ffff00', '#ff69b4', '#00ff00'];
     
     for (let i = 0; i < confettiCount; i++) {
         const confetti = document.createElement('div');
         confetti.classList.add('confetti');
         confetti.style.left = Math.random() * 100 + '%';
         confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-        confetti.style.width = Math.random() * 5 + 5 + 'px';
+        confetti.style.width = Math.random() * 8 + 4 + 'px';
         confetti.style.height = confetti.style.width;
-        confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
-        confetti.style.animationDelay = (Math.random() * 0.5) + 's';
+        confetti.style.animationDuration = (Math.random() * 2.5 + 2.5) + 's';
+        confetti.style.animationDelay = (Math.random() * 0.3) + 's';
         
         confettiContainer.appendChild(confetti);
         
@@ -603,35 +957,51 @@ resetBtn.addEventListener('click', () => {
 });
 
 /**
- * Reseta o jogo
+ * Reseta o jogo completamente
  */
 function resetGame() {
-    bird.x = SLINGSHOT_X;
-    bird.y = SLINGSHOT_Y;
+    // Reset pássaro
+    bird.x = BIRD_START_X;
+    bird.y = BIRD_START_Y;
     bird.vx = 0;
     bird.vy = 0;
     bird.isFlying = false;
     bird.hasHit = false;
+    bird.rotation = 0;
     
+    // Reset porquinho
     pig.x = PIG_X;
     pig.y = PIG_Y;
     pig.isDefeated = false;
     pig.shakeAmount = 0;
+    pig.shakeAngle = 0;
     
+    // Reset blocos
+    blocks = [
+        { x: PIG_X - 70, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 },
+        { x: PIG_X, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 },
+        { x: PIG_X + 70, y: GAME_HEIGHT - 100, width: 35, height: 70, rotation: 0, health: 100 }
+    ];
+    
+    // Reset estado
+    isDragging = false;
     tutorialComplete = false;
     attemptCount = 0;
     attemptCountEl.textContent = attemptCount;
     
+    // Reset botão se necessário
     if (!loginBtn.classList.contains('disabled')) {
         loginBtn.classList.add('disabled');
         loginBtn.classList.remove('success');
         loginBtn.disabled = true;
         loginBtn.title = 'Complete o tutorial primeiro';
     }
+    
+    console.log('🔄 Jogo resetado');
 }
 
 /**
- * Previne submit do formulário se o tutorial não foi completado
+ * Previne submit do formulário
  */
 loginForm.addEventListener('submit', (e) => {
     if (!tutorialComplete) {
@@ -652,36 +1022,27 @@ function showButtonTooltip() {
     }, 2000);
 }
 
-/**
- * Reproduz som (simulado - sem áudio real por enquanto)
- */
-function playSound(soundType) {
-    // Aqui você pode adicionar sons reais usando Web Audio API
-    // Por enquanto, apenas um console log como referência
-    console.log(`🔊 Som: ${soundType}`);
-}
-
 // ========================================
 // LOOP DE ANIMAÇÃO
 // ========================================
 
 /**
- * Redimensiona o canvas para ser responsivo
+ * Redimensiona o canvas
  */
 function resizeCanvas() {
     const container = canvas.parentElement;
     const width = container.clientWidth;
+    const ratio = GAME_WIDTH / GAME_HEIGHT;
     
-    canvas.width = GAME_WIDTH;
-    canvas.height = GAME_HEIGHT;
+    canvas.width = Math.min(GAME_WIDTH, Math.floor(width * 0.95));
+    canvas.height = Math.floor(canvas.width / ratio);
     
-    // Usar CSS para escalar
-    canvas.style.maxWidth = '100%';
-    canvas.style.height = 'auto';
+    // Escalar contexto para manter nitidez
+    ctx.scale(canvas.width / GAME_WIDTH, canvas.height / GAME_HEIGHT);
 }
 
 /**
- * Loop principal de animação
+ * Loop principal
  */
 function gameLoop() {
     updateBirdPhysics();
@@ -700,9 +1061,9 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     gameLoop();
+    console.log('🎮 Jogo inicializado!');
 }
 
-// Iniciar quando o DOM estiver pronto
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
